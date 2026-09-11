@@ -1,14 +1,10 @@
 #include "alarm.h"
+#include "system_events.h"
 #include "driver/gpio.h"
 #include "driver/ledc.h"
 #include "freertos/task.h"
-#include <cstdio>
 
 #define BUZZER_PIN GPIO_NUM_25
-#define BUZZER_FREQUENCY_HZ 2000
-
-static constexpr ledc_timer_t buzzerTimer = LEDC_TIMER_0;
-static constexpr ledc_channel_t buzzerChannel = LEDC_CHANNEL_0;
 
 static QueueHandle_t alarmQueue;
 
@@ -19,34 +15,27 @@ AlarmState evaluateTemperature(float temperature) {
 }
 
 static void configure_buzzer_gpio(void) {
-    ledc_timer_config_t timerConfig = {};
-    timerConfig.speed_mode = LEDC_LOW_SPEED_MODE;
-    timerConfig.timer_num = buzzerTimer;
-    timerConfig.duty_resolution = LEDC_TIMER_10_BIT;
-    timerConfig.freq_hz = BUZZER_FREQUENCY_HZ;
-    timerConfig.clk_cfg = LEDC_AUTO_CLK;
-    ledc_timer_config(&timerConfig);
+    ledc_timer_config_t timer_cfg = {};
+    timer_cfg.speed_mode = LEDC_LOW_SPEED_MODE;
+    timer_cfg.duty_resolution = LEDC_TIMER_10_BIT;
+    timer_cfg.timer_num = LEDC_TIMER_0;
+    timer_cfg.freq_hz = 2000;
+    timer_cfg.clk_cfg = LEDC_AUTO_CLK;
+    ledc_timer_config(&timer_cfg);
 
-    ledc_channel_config_t channelConfig = {};
-    channelConfig.gpio_num = BUZZER_PIN;
-    channelConfig.speed_mode = LEDC_LOW_SPEED_MODE;
-    channelConfig.channel = buzzerChannel;
-    channelConfig.intr_type = LEDC_INTR_DISABLE;
-    channelConfig.timer_sel = buzzerTimer;
-    channelConfig.duty = 0;
-    channelConfig.hpoint = 0;
-    ledc_channel_config(&channelConfig);
-}
-
-static void set_buzzer_enabled(bool enabled) {
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, buzzerChannel, enabled ? 512 : 0);
-    ledc_update_duty(LEDC_LOW_SPEED_MODE, buzzerChannel);
+    ledc_channel_config_t ch_cfg = {};
+    ch_cfg.gpio_num = BUZZER_PIN;
+    ch_cfg.speed_mode = LEDC_LOW_SPEED_MODE;
+    ch_cfg.channel = LEDC_CHANNEL_0;
+    ch_cfg.timer_sel = LEDC_TIMER_0;
+    ch_cfg.duty = 0;
+    ch_cfg.hpoint = 0;
+    ledc_channel_config(&ch_cfg);
 }
 
 void alarm_init(QueueHandle_t alarmQueueHandle) {
     alarmQueue = alarmQueueHandle;
     configure_buzzer_gpio();
-    set_buzzer_enabled(false);
 }
 
 void AlarmTask(void *pvParameters) {
@@ -63,9 +52,21 @@ void AlarmTask(void *pvParameters) {
                        state == AlarmState::NORMAL ? "NORMAL" :
                        state == AlarmState::LOW_TEMPERATURE ? "LOW_TEMPERATURE" : "HIGH_TEMPERATURE");
                 lastState = state;
+
+                if (state == AlarmState::NORMAL) {
+                    xEventGroupClearBits(systemEvents, EVENT_ALARM);
+                } else {
+                    xEventGroupSetBits(systemEvents, EVENT_ALARM);
+                }
             }
 
-            set_buzzer_enabled(state != AlarmState::NORMAL);
+            if (state == AlarmState::NORMAL) {
+                ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0);
+                ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
+            } else {
+                ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 512);
+                ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
+            }
         }
     }
 }

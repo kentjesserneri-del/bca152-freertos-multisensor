@@ -51,6 +51,7 @@ void DisplayTask(void *pvParameters)
     DisplayMode mode = DisplayMode::TEMPERATURE;
     DisplayMode lastDrawnMode = (DisplayMode)0xFF;
     int lastDrawnValue = -9999;
+    bool lastAlarmActive = false;
 
     while (true) {
         SensorData incoming;
@@ -78,10 +79,10 @@ void DisplayTask(void *pvParameters)
             continue;
         }
 
-        // On INACTIVE -> ACTIVE transition, mag force sya i redraw
         if (!wasActive) {
             lastDrawnMode = (DisplayMode)0xFF;
             lastDrawnValue = -9999;
+            lastAlarmActive = !lastAlarmActive;  // force mismatch → force redraw
         }
         wasActive = true;
 
@@ -95,12 +96,15 @@ void DisplayTask(void *pvParameters)
             case DisplayMode::MOTION:      value = latest.motionDetected ? 1 : 0;  break;
         }
 
-        if (mode == lastDrawnMode && value == lastDrawnValue) continue;
+        bool alarmActive = (xEventGroupGetBits(systemEvents) & EVENT_ALARM) != 0;
+
+        if (mode == lastDrawnMode && value == lastDrawnValue && alarmActive == lastAlarmActive) continue;
         lastDrawnMode = mode;
         lastDrawnValue = value;
+        lastAlarmActive = alarmActive;
 
         display_clear();
-        display_draw_string(0, 0, "ROOM MONITOR");
+        display_draw_string(0, 0, alarmActive ? "ROOM MONITOR *" : "ROOM MONITOR");
 
         char line[17];
         switch (mode) {

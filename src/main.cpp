@@ -7,11 +7,13 @@
 #include "sensor_data.h"
 #include "display.h"
 #include "input.h"
+#include "alarm.h"
 
 #define DHT_PIN GPIO_NUM_4
 
 static QueueHandle_t sensorQueue;
 static QueueHandle_t modeQueue;
+static QueueHandle_t alarmQueue;
 static adc_oneshot_unit_handle_t adc1_handle;
 
 void SensorTask(void *pvParameters)
@@ -31,6 +33,8 @@ void SensorTask(void *pvParameters)
         data.motionDetected = false;
 
         xQueueSend(sensorQueue, &data, portMAX_DELAY);
+        xQueueSend(alarmQueue,  &data, portMAX_DELAY);
+
         vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(2000));
     }
 }
@@ -123,15 +127,18 @@ extern "C" void app_main(void)
 
     // Queues
     sensorQueue = xQueueCreate(5, sizeof(SensorData));
-    modeQueue = xQueueCreate(1, sizeof(DisplayMode));
+    modeQueue   = xQueueCreate(1, sizeof(DisplayMode));
+    alarmQueue  = xQueueCreate(5, sizeof(SensorData));
 
     DisplayMode initialMode = DisplayMode::TEMPERATURE;
     xQueueOverwrite(modeQueue, &initialMode);
 
     input_init(modeQueue);
+    alarm_init(alarmQueue);
 
     // Tasks
     xTaskCreate(SensorTask,  "SensorTask",  4096, NULL, 2, NULL);
     xTaskCreate(InputTask,   "InputTask",   2048, NULL, 2, NULL);
+    xTaskCreate(AlarmTask,   "AlarmTask",   2048, NULL, 3, NULL);
     xTaskCreate(DisplayTask, "DisplayTask", 4096, NULL, 1, NULL);
 }

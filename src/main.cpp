@@ -2,12 +2,15 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
+#include "freertos/event_groups.h"
 #include "esp_adc/adc_oneshot.h"
 #include "dht22.h"
 #include "sensor_data.h"
 #include "display.h"
 #include "input.h"
 #include "alarm.h"
+#include "system_events.h"
+#include "motion.h"
 
 #define DHT_PIN GPIO_NUM_4
 
@@ -15,6 +18,8 @@ static QueueHandle_t sensorQueue;
 static QueueHandle_t modeQueue;
 static QueueHandle_t alarmQueue;
 static adc_oneshot_unit_handle_t adc1_handle;
+
+EventGroupHandle_t systemEvents;
 
 void SensorTask(void *pvParameters)
 {
@@ -30,7 +35,7 @@ void SensorTask(void *pvParameters)
         adc_oneshot_read(adc1_handle, ADC_CHANNEL_0, &raw);
         data.lightLevel = (raw * 100) / 4095;
 
-        data.motionDetected = false;
+        data.motionDetected = (xEventGroupGetBits(systemEvents) & EVENT_MOTION) != 0;
 
         xQueueSend(sensorQueue, &data, portMAX_DELAY);
         xQueueSend(alarmQueue,  &data, portMAX_DELAY);
@@ -60,6 +65,25 @@ void DisplayTask(void *pvParameters)
         if (xQueuePeek(modeQueue, &peeked, 0) == pdTRUE) {
             mode = peeked;
         }
+
+        EventBits_t bits = xEventGroupGetBits(systemEvents);
+        bool systemActive = (bits & EVENT_ACTIVE) != 0;
+
+        static bool wasActive = true;
+        if (!systemActive) {
+            if (wasActive) {
+                display_clear();
+                wasActive = false;
+            }
+            continue;
+        }
+
+        // On INACTIVE -> ACTIVE transition, mag force sya i redraw
+        if (!wasActive) {
+            lastDrawnMode = (DisplayMode)0xFF;
+            lastDrawnValue = -9999;
+        }
+        wasActive = true;
 
         if (!haveData) continue;
 
@@ -133,12 +157,16 @@ extern "C" void app_main(void)
     DisplayMode initialMode = DisplayMode::TEMPERATURE;
     xQueueOverwrite(modeQueue, &initialMode);
 
+    // Event group
+    systemEvents = xEventGroupCreate();
+
     input_init(modeQueue);
     alarm_init(alarmQueue);
 
     // Tasks
     xTaskCreate(SensorTask,  "SensorTask",  4096, NULL, 2, NULL);
     xTaskCreate(InputTask,   "InputTask",   2048, NULL, 2, NULL);
+    xTaskCreate(MotionTask,  "MotionTask",  2048, NULL, 2, NULL);
     xTaskCreate(AlarmTask,   "AlarmTask",   2048, NULL, 3, NULL);
     xTaskCreate(DisplayTask, "DisplayTask", 4096, NULL, 1, NULL);
 }

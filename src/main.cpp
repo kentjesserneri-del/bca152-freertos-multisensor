@@ -1,50 +1,28 @@
 #include <cstdio>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "dht22.h"
 
-// Task 1: Runs every 1 second
-void TaskOne(void *pvParameters)
+#define DHT_PIN GPIO_NUM_4
+
+void SensorTask(void *pvParameters)
 {
+    TickType_t lastWake = xTaskGetTickCount();
     while (true) {
-        printf("[TaskOne] Hello from Task One\n");
-        vTaskDelay(pdMS_TO_TICKS(1000)); // Block for 1 second
+        dht22_reading_t reading = dht22_read(DHT_PIN);
+        if (reading.valid) {
+            printf("[SensorTask] Temp: %.1f C, Humidity: %.1f %%\n",
+                   reading.temperature, reading.humidity);
+        } else {
+            printf("[SensorTask] Failed to read DHT22\n");
+        }
+        vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(2000));
     }
 }
 
-// Task 2: Runs every 2 seconds
-void TaskTwo(void *pvParameters)
-{
-    while (true) {
-        printf("[TaskTwo] Hello from Task Two\n");
-        vTaskDelay(pdMS_TO_TICKS(2000)); // Block for 2 seconds
-    }
-}
-
-// Main entry point
 extern "C" void app_main(void)
 {
     printf("BCA152 FreeRTOS Multisensor\n");
     printf("System starting...\n");
-
-    // Create TaskOne with priority 1
-    xTaskCreate(
-        TaskOne,        // Task function
-        "TaskOne",      // Task name
-        2048,           // Stack size (words)
-        NULL,           // Parameters
-        1,              // Priority
-        NULL            // Task handle (not needed)
-    );
-
-    // Create TaskTwo with priority 1
-    xTaskCreate(
-        TaskTwo,        // Task function
-        "TaskTwo",      // Task name
-        2048,           // Stack size (words)
-        NULL,           // Parameters
-        1,              // Priority
-        NULL            // Task handle (not needed)
-    );
-
-    // app_main can exit - tasks will continue running
+    xTaskCreate(SensorTask, "SensorTask", 4096, NULL, 2, NULL);
 }

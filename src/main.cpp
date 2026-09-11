@@ -6,10 +6,12 @@
 #include "dht22.h"
 #include "sensor_data.h"
 #include "display.h"
+#include "input.h"
 
 #define DHT_PIN GPIO_NUM_4
 
 static QueueHandle_t sensorQueue;
+static QueueHandle_t modeQueue;
 static adc_oneshot_unit_handle_t adc1_handle;
 
 void SensorTask(void *pvParameters)
@@ -35,24 +37,65 @@ void SensorTask(void *pvParameters)
 
 void DisplayTask(void *pvParameters)
 {
-    SensorData received;
+    SensorData latest = {};
+    bool haveData = false;
+    DisplayMode mode = DisplayMode::TEMPERATURE;
+    DisplayMode lastDrawnMode = (DisplayMode)0xFF;
+    int lastDrawnValue = -9999;
 
     while (true) {
-        if (xQueueReceive(sensorQueue, &received, portMAX_DELAY) == pdTRUE) {
-
+        SensorData incoming;
+        if (xQueueReceive(sensorQueue, &incoming, pdMS_TO_TICKS(200)) == pdTRUE) {
+            latest = incoming;
+            haveData = true;
             printf("[DisplayTask] Temp: %.1f C, Humidity: %.1f %%, Light: %d%%\n",
-                   received.temperature, received.humidity, received.lightLevel);
-
-            char line2[17];
-            snprintf(line2, sizeof(line2), "%d.%dC L:%d%%",
-                     (int)received.temperature,
-                     (int)(received.temperature * 10) % 10,
-                     received.lightLevel);
-
-            display_draw_string(0, 0, "ROOM MONITOR");
-            display_draw_string(2, 0, "TEMPERATURE");
-            display_draw_string(4, 0, line2);
+                   latest.temperature, latest.humidity, latest.lightLevel);
         }
+
+        DisplayMode peeked;
+        if (xQueuePeek(modeQueue, &peeked, 0) == pdTRUE) {
+            mode = peeked;
+        }
+
+        if (!haveData) continue;
+
+        int value = 0;
+        switch (mode) {
+            case DisplayMode::TEMPERATURE: value = (int)(latest.temperature * 10); break;
+            case DisplayMode::HUMIDITY:    value = (int)(latest.humidity * 10);    break;
+            case DisplayMode::LIGHT:       value = latest.lightLevel;              break;
+            case DisplayMode::MOTION:      value = latest.motionDetected ? 1 : 0;  break;
+        }
+
+        if (mode == lastDrawnMode && value == lastDrawnValue) continue;
+        lastDrawnMode = mode;
+        lastDrawnValue = value;
+
+        display_clear();
+        display_draw_string(0, 0, "ROOM MONITOR");
+
+        char line[17];
+        switch (mode) {
+            case DisplayMode::TEMPERATURE:
+                display_draw_string(2, 0, "TEMPERATURE");
+                snprintf(line, sizeof(line), "%d.%dC",
+                         (int)latest.temperature, (int)(latest.temperature * 10) % 10);
+                break;
+            case DisplayMode::HUMIDITY:
+                display_draw_string(2, 0, "HUMIDITY");
+                snprintf(line, sizeof(line), "%d.%d%%",
+                         (int)latest.humidity, (int)(latest.humidity * 10) % 10);
+                break;
+            case DisplayMode::LIGHT:
+                display_draw_string(2, 0, "LIGHT");
+                snprintf(line, sizeof(line), "%d%%", latest.lightLevel);
+                break;
+            case DisplayMode::MOTION:
+                display_draw_string(2, 0, "MOTION");
+                snprintf(line, sizeof(line), "%s", latest.motionDetected ? "YES" : "NO");
+                break;
+        }
+        display_draw_string(4, 0, line);
     }
 }
 
@@ -61,7 +104,7 @@ extern "C" void app_main(void)
     printf("BCA152 FreeRTOS Multisensor\n");
     printf("System starting...\n");
 
-    // ADC init (LDR)
+    // ADC init
     adc_oneshot_unit_init_cfg_t init_config = {};
     init_config.unit_id = ADC_UNIT_1;
     init_config.clk_src = ADC_RTC_CLK_SRC_DEFAULT;
@@ -73,14 +116,22 @@ extern "C" void app_main(void)
     chan_config.bitwidth = ADC_BITWIDTH_DEFAULT;
     adc_oneshot_config_channel(adc1_handle, ADC_CHANNEL_0, &chan_config);
 
-    // OLED init (with power-up delay)
+    // OLED init
     vTaskDelay(pdMS_TO_TICKS(150));
     display_init();
     display_clear();
 
-    // Queue + tasks
+    // Queues
     sensorQueue = xQueueCreate(5, sizeof(SensorData));
+    modeQueue = xQueueCreate(1, sizeof(DisplayMode));
 
+    DisplayMode initialMode = DisplayMode::TEMPERATURE;
+    xQueueOverwrite(modeQueue, &initialMode);
+
+    input_init(modeQueue);
+
+    // Tasks
     xTaskCreate(SensorTask,  "SensorTask",  4096, NULL, 2, NULL);
+    xTaskCreate(InputTask,   "InputTask",   2048, NULL, 2, NULL);
     xTaskCreate(DisplayTask, "DisplayTask", 4096, NULL, 1, NULL);
 }

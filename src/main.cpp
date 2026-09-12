@@ -11,6 +11,7 @@
 #include "alarm.h"
 #include "system_events.h"
 #include "motion.h"
+#include "rtos_objects.h"
 
 #define DHT_PIN GPIO_NUM_4
 
@@ -58,8 +59,10 @@ void DisplayTask(void *pvParameters)
         if (xQueueReceive(sensorQueue, &incoming, pdMS_TO_TICKS(200)) == pdTRUE) {
             latest = incoming;
             haveData = true;
+            xSemaphoreTake(serialMutex, portMAX_DELAY);
             printf("[DisplayTask] Temp: %.1f C, Humidity: %.1f %%, Light: %d%%\n",
                    latest.temperature, latest.humidity, latest.lightLevel);
+            xSemaphoreGive(serialMutex);
         }
 
         DisplayMode peeked;
@@ -82,7 +85,7 @@ void DisplayTask(void *pvParameters)
         if (!wasActive) {
             lastDrawnMode = (DisplayMode)0xFF;
             lastDrawnValue = -9999;
-            lastAlarmActive = !lastAlarmActive;  // force mismatch → force redraw
+            lastAlarmActive = !lastAlarmActive;
         }
         wasActive = true;
 
@@ -152,6 +155,9 @@ extern "C" void app_main(void)
     vTaskDelay(pdMS_TO_TICKS(150));
     display_init();
     display_clear();
+
+    // Mutex
+    serialMutex = xSemaphoreCreateMutex();
 
     // Queues
     sensorQueue = xQueueCreate(5, sizeof(SensorData));

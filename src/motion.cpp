@@ -1,5 +1,6 @@
 #include "motion.h"
 #include "system_events.h"
+#include "rtos_objects.h"
 #include "driver/gpio.h"
 #include "freertos/task.h"
 #include <cstdio>
@@ -42,8 +43,11 @@ void MotionTask(void *pvParameters) {
         SystemState state = evaluateSystemState(motionNow, idleMs, INACTIVITY_TIMEOUT_MS);
 
         if (state != lastState) {
+            xSemaphoreTake(serialMutex, portMAX_DELAY);
             printf("[MotionTask] State changed to %s\n",
                    state == SystemState::ACTIVE ? "ACTIVE" : "INACTIVE");
+            xSemaphoreGive(serialMutex);
+
             if (state == SystemState::ACTIVE) {
                 xEventGroupSetBits(systemEvents, EVENT_ACTIVE);
             } else {

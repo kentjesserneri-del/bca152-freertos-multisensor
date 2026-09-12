@@ -1,5 +1,6 @@
 #include "alarm.h"
 #include "system_events.h"
+#include "rtos_objects.h"
 #include "driver/gpio.h"
 #include "driver/ledc.h"
 #include "freertos/task.h"
@@ -47,10 +48,12 @@ void AlarmTask(void *pvParameters) {
             AlarmState state = evaluateTemperature(data.temperature);
 
             if (state != lastState) {
+                xSemaphoreTake(serialMutex, portMAX_DELAY);
                 printf("[AlarmTask] Temp %.1f C -> state changed to %s\n",
                        data.temperature,
                        state == AlarmState::NORMAL ? "NORMAL" :
                        state == AlarmState::LOW_TEMPERATURE ? "LOW_TEMPERATURE" : "HIGH_TEMPERATURE");
+                xSemaphoreGive(serialMutex);
                 lastState = state;
 
                 if (state == AlarmState::NORMAL) {

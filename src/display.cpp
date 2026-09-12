@@ -107,7 +107,7 @@ static void set_cursor(uint8_t page, uint8_t col)
 
 void display_clear(void)
 {
-    uint8_t blank[16] = {0};
+    const uint8_t blank[16] = {0};
     for (uint8_t page = 0; page < 8; page++) {
         set_cursor(page, 0);
         for (int i = 0; i < 8; i++) {
@@ -121,7 +121,7 @@ void display_draw_string(uint8_t page, uint8_t col, const char *str)
     set_cursor(page, col);
     while (*str) {
         ssd1306_data(glyph(*str), 5);
-        uint8_t gap[1] = {0x00};
+        const uint8_t gap[1] = {0x00};
         ssd1306_data(gap, 1);
         str++;
     }

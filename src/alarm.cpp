@@ -9,12 +9,6 @@
 
 static QueueHandle_t alarmQueue;
 
-AlarmState evaluateTemperature(float temperature) {
-    if (temperature < LOW_TEMPERATURE_LIMIT)  return AlarmState::LOW_TEMPERATURE;
-    if (temperature > HIGH_TEMPERATURE_LIMIT) return AlarmState::HIGH_TEMPERATURE;
-    return AlarmState::NORMAL;
-}
-
 static void configure_buzzer_gpio(void) {
     ledc_timer_config_t timer_cfg = {};
     timer_cfg.speed_mode = LEDC_LOW_SPEED_MODE;

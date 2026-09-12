@@ -1,10 +1,4 @@
 #pragma once
-#include <stdint.h>
+#include "motion_logic.h"
 
-enum class SystemState {
-    ACTIVE,
-    INACTIVE
-};
-
-SystemState evaluateSystemState(bool motionDetectedNow, uint32_t msSinceLastMotion, uint32_t timeoutMs);
 void MotionTask(void *pvParameters);

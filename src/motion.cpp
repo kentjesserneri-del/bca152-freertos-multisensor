@@ -8,12 +8,6 @@
 #define PIR_PIN GPIO_NUM_26
 #define INACTIVITY_TIMEOUT_MS 15000
 
-SystemState evaluateSystemState(bool motionDetectedNow, uint32_t msSinceLastMotion, uint32_t timeoutMs) {
-    if (motionDetectedNow) return SystemState::ACTIVE;
-    if (msSinceLastMotion >= timeoutMs) return SystemState::INACTIVE;
-    return SystemState::ACTIVE;
-}
-
 static void configure_pir_gpio(void) {
     gpio_config_t conf = {};
     conf.pin_bit_mask = 1ULL << PIR_PIN;

@@ -48,6 +48,7 @@ static const uint8_t *glyph(char c)
     static const uint8_t SP[5]  = {0x00,0x00,0x00,0x00,0x00};
     static const uint8_t DOT[5] = {0x00,0x60,0x60,0x00,0x00};
     static const uint8_t DSH[5] = {0x08,0x08,0x08,0x08,0x08};
+    static const uint8_t STAR[5] = {0x14,0x08,0x3E,0x08,0x14};
     static const uint8_t PCT[5] = {0x23,0x13,0x08,0x64,0x62};
     static const uint8_t COL[5] = {0x00,0x36,0x36,0x00,0x00};
     static const uint8_t D[10][5] = {
@@ -75,6 +76,7 @@ static const uint8_t *glyph(char c)
     if (c == ' ') return SP;
     if (c == '.') return DOT;
     if (c == '-') return DSH;
+    if (c == '*') return STAR;
     if (c == '%') return PCT;
     if (c == ':') return COL;
     if (c >= '0' && c <= '9') return D[c - '0'];

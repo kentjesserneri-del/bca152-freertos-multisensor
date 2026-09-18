@@ -43,6 +43,12 @@ The system is built around five FreeRTOS tasks that never talk to each other dir
 
 The hardware layer consists of an ESP32 Dev Module, a DHT22 temperature/humidity sensor, an LDR for light level, an SSD1306 128x64 OLED over I2C, a KY-040 rotary encoder, a passive buzzer driven by LEDC PWM, and a PIR motion sensor. All of these are simulated in Wokwi — no physical hardware was used.
 
+## Circuit
+
+![Wokwi circuit](docs/images/wokwi-circuit.png)
+
+The DHT22 uses a single data pin on GPIO4. The LDR sits on GPIO36, one of the ESP32's ADC1 input-only pins — the correct choice for reading an analog sensor. The OLED talks over I2C on GPIO18 (SDA) and GPIO19 (SCL). The rotary encoder uses GPIO32 and GPIO33 for CLK and DT, kept separate from the I2C pins on purpose after running into a pin conflict earlier in development. The buzzer is driven with LEDC PWM on GPIO25 instead of a plain digital pin, since a passive buzzer needs an oscillating signal to make sound. The PIR sensor sits on GPIO26.
+
 ## FreeRTOS Architecture
 
 The five tasks and their priorities:
@@ -145,6 +151,24 @@ bca152-freertos-multisensor/
 └── README.md
 ```
 
+## Screenshots
+
+**OLED showing a temperature reading:**
+
+![OLED showing a temperature reading](docs/images/oled-temperature.png)
+
+**OLED showing the Motion page with motion detected:**
+
+![OLED showing the Motion page](docs/images/oled-motion.png)
+
+**Terminal output during a normal run:**
+
+![Terminal output during a normal run](docs/images/terminal-normal.png)
+
+**Terminal showing an alarm state transition:**
+
+![Terminal showing an alarm state transition](docs/images/terminal-alarm.png)
+
 ## Getting Started
 
 1. Install Visual Studio Code.
@@ -206,6 +230,10 @@ Expected output: `No defects found`.
 ## Functional Verification
 
 A full verification record — including observed behavior for 20 tests covering boot, sensors, display, encoder navigation, alarm behavior, motion state, and concurrency — is in [`docs/functional-verification.md`](docs/functional-verification.md).
+
+## Fault Experiments
+
+Three deliberate FreeRTOS faults were introduced and observed, then reverted: removing a task's blocking delay, raising a task's priority above everything else, and removing the serial mutex. Results and analysis are in [`docs/fault-experiments.md`](docs/fault-experiments.md).
 
 ## Engineering Decisions
 

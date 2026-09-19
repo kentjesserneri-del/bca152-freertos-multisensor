@@ -1,6 +1,7 @@
 #include "display.h"
 #include "driver/i2c_master.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include <string.h>
 
 #define I2C_PORT      I2C_NUM_0
@@ -33,6 +34,7 @@ static void ssd1306_cmd(uint8_t cmd)
 {
     uint8_t buf[2] = {0x00, cmd};
     i2c_master_transmit(oled_handle, buf, 2, pdMS_TO_TICKS(100));
+    vTaskDelay(1);   // break burst timing for Wokwi's I2C simulator
 }
 
 static void ssd1306_data(const uint8_t *data, size_t len)
@@ -41,6 +43,7 @@ static void ssd1306_data(const uint8_t *data, size_t len)
     buf[0] = 0x40;
     memcpy(&buf[1], data, len);
     i2c_master_transmit(oled_handle, buf, len + 1, pdMS_TO_TICKS(100));
+    vTaskDelay(1);   // break burst timing for Wokwi's I2C simulator
 }
 
 static const uint8_t *glyph(char c)
@@ -48,7 +51,6 @@ static const uint8_t *glyph(char c)
     static const uint8_t SP[5]  = {0x00,0x00,0x00,0x00,0x00};
     static const uint8_t DOT[5] = {0x00,0x60,0x60,0x00,0x00};
     static const uint8_t DSH[5] = {0x08,0x08,0x08,0x08,0x08};
-    static const uint8_t STAR[5] = {0x14,0x08,0x3E,0x08,0x14};
     static const uint8_t PCT[5] = {0x23,0x13,0x08,0x64,0x62};
     static const uint8_t COL[5] = {0x00,0x36,0x36,0x00,0x00};
     static const uint8_t D[10][5] = {
@@ -76,7 +78,6 @@ static const uint8_t *glyph(char c)
     if (c == ' ') return SP;
     if (c == '.') return DOT;
     if (c == '-') return DSH;
-    if (c == '*') return STAR;
     if (c == '%') return PCT;
     if (c == ':') return COL;
     if (c >= '0' && c <= '9') return D[c - '0'];

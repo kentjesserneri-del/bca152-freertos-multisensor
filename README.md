@@ -251,9 +251,11 @@ Several design decisions were made based on what the lab required and what worke
 
 6. **Separate queues for separate consumers.** Since a FreeRTOS queue delivers each item to exactly one receiver, SensorTask pushes to both `sensorQueue` (for DisplayTask) and `alarmQueue` (for AlarmTask).
 
+7. **Delay between consecutive I2C transactions.** `display_init()` and `display_clear()` each fire many I2C transactions in immediate succession with no gap between them. Comparing exact log timestamps against the code showed this burst pattern, not the choice of pins, was the actual cause of a recurring I2C timeout warning. Adding a single-tick `vTaskDelay(1)` between transactions in `display.cpp` resolved it completely, confirmed with a before/after comparison of identical boot and INACTIVE-transition runs.
+
 ## Limitations
 
-1. Wokwi prints a recurring `GPIO 18 is not usable, maybe conflict with others` warning from the I2C master driver. It showed up on every pin pair tested for the OLED (21/22, 15/16, 25/26, 18/19), and the OLED renders correctly in every case — so it looks like a Wokwi quirk under ESP-IDF v6.0.1, not a wiring or code issue.
+1. **Resolved.** The I2C driver used to print a recurring `GPIO 18 is not usable, maybe conflict with others` warning during `display_init()` and any call to `display_clear()`. Tracing the exact log timestamps against the code showed the warning only ever appeared during bursts of many I2C transactions sent back to back with no delay between them — the 28-command init sequence, and the 88-transaction full-screen clear — never during the steady 2-second sensor update cycle where no I2C traffic occurs at all. Adding a single-tick `vTaskDelay(1)` between each I2C transaction in `display.cpp` eliminated the warning entirely, confirmed by comparing identical boot and INACTIVE-transition runs before and after the change. This ruled out a pin-conflict explanation and pointed to Wokwi's simulated I2C peripheral not reliably keeping up with rapid consecutive transactions under the ESP-IDF v6.0.1 `i2c_master` driver.
 
 2. The hand-written DHT22 bit-bang driver can occasionally produce a transient bad reading when the simulated sensor value is changed very quickly (for example, dragging a slider in Wokwi).
 
